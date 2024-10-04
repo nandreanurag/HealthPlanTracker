@@ -153,9 +153,11 @@ public class PlanController {
             HttpHeaders headersToSend = new HttpHeaders();
             headersToSend.setETag(updatedETag);
             return new ResponseEntity<>("{\"message\": \"Plan updated successfully\"}", headersToSend, HttpStatus.OK);
-        } catch (BadRequestException | ResourceNotFoundException e) {
+        } catch (BadRequestException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
-        } catch (ResourceNotModifiedException e) {
+        } catch (ResourceNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        }catch (ResourceNotModifiedException e) {
             return ResponseEntity.status(412).eTag(currentETag).body("Precondition Failed: The plan has changed.");
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body(e.getMessage());
