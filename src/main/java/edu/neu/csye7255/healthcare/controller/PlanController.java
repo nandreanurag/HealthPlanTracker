@@ -74,16 +74,28 @@ public class PlanController {
             } catch (Exception e) {
                 throw new ETagParseException("ETag value invalid! Make sure the ETag value is a string!");
             }
+            System.out.println(ifNoneMatch);
+
+            // Check If-Match header
+            List<String> ifMatch;
+            try {
+                ifMatch = headers.getIfMatch();
+            } catch (Exception e) {
+                throw new ETagParseException("ETag value invalid! Make sure the ETag value is a string!");
+            }
+            System.out.println(ifMatch);
 
             Map<String, Object> objectToReturn = planService.getPlan(key);
             String eTag = objectToReturn.get("eTag").toString();
-            ;
             HttpHeaders headersToSend = new HttpHeaders();
             headersToSend.setETag(eTag);
 
-
+            System.out.println(eTag);
             if (objectType.equals("plan") && ifNoneMatch.contains(eTag))
                 return new ResponseEntity<>(null, headersToSend, HttpStatus.NOT_MODIFIED);
+
+            if (objectType.equals("plan") && !ifMatch.isEmpty() && !ifMatch.contains(eTag))
+                return new ResponseEntity<>(null, headersToSend, HttpStatus.PRECONDITION_FAILED);
 
             if (objectType.equals("plan"))
                 return new ResponseEntity<>(objectToReturn, headersToSend, HttpStatus.OK);
@@ -96,7 +108,6 @@ public class PlanController {
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body(e.getMessage());
         }
-
     }
 
     @DeleteMapping("/{objectType}/{planType}/{objectId}")
@@ -157,7 +168,7 @@ public class PlanController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         } catch (ResourceNotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
-        }catch (ResourceNotModifiedException e) {
+        } catch (ResourceNotModifiedException e) {
             return ResponseEntity.status(412).eTag(currentETag).body("Precondition Failed: The plan has changed.");
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body(e.getMessage());
