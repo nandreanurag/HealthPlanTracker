@@ -30,7 +30,7 @@ public class JsonSchemaValidationService{
         //List<ValidationMessage> list = errors.stream().collect(Collectors.toList());
         if(!errors.isEmpty()){
             //event is valid.
-            log.info("event is valid");
+//            log.info("event is valid");
             throw new BadRequestException(errors.toString());
 
         }

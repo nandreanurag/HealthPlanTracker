@@ -60,6 +60,16 @@ public class PlanService {
         return response;
     }
 
+    public JSONObject getPlanObject(String key) {
+
+        Optional<JSONObject> plan = cacheRepository.get(key);
+        if (plan.isEmpty()) {
+            throw new ResourceNotFoundException("Plan not found!");
+        }
+
+        return plan.get();
+    }
+
     public void deletePlan(String key) {
         try {
             cacheRepository.remove(key);
