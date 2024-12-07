@@ -1,13 +1,14 @@
 package edu.neu.csye7255.healthcare.controller;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import edu.neu.csye7255.healthcare.exeception.*;
 import edu.neu.csye7255.healthcare.service.JsonSchemaValidationService;
 import edu.neu.csye7255.healthcare.service.PlanService;
 import edu.neu.csye7255.healthcare.util.EtagProvider;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -31,6 +32,12 @@ public class PlanController {
     @Autowired
     private EtagProvider etagProvider;
 
+    @Autowired
+    private RabbitTemplate template;
+
+    @Value("${rabbitmq.queue}")
+    private String queueName;
+
     @PostMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> createPlan(@RequestBody(required = false) String planObject) {
 
@@ -46,8 +53,12 @@ public class PlanController {
 
             String eTag = planService.createPlan(plan, key);
 
-//            return new ResponseEntity<>("{\"objectId\": \"" + plan.getString("objectId") + "\"}", headersToSend, HttpStatus.CREATED);
+            Map<String, String> message = new HashMap<>();
+            message.put("operation", "SAVE");
+            message.put("body", planObject);
 
+            System.out.println("Sending message: " + message);
+            template.convertAndSend(queueName, message);
             HttpHeaders responseHeaders = new HttpHeaders();
             responseHeaders.setETag(eTag);
 
@@ -55,7 +66,6 @@ public class PlanController {
         } catch (BadRequestException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         } catch (Exception e) {
-//            System.out.println(e.getMessage());
             return ResponseEntity.internalServerError().body(e.getMessage());
         }
     }
@@ -71,8 +81,6 @@ public class PlanController {
             String key = objectType + ":" + planType + ":" + objectId;
             if (!planService.isKeyPresent(key))
                 throw new ResourceNotFoundException("Plan not found!");
-
-            // Check if the ETag provided is not corrupt
             List<String> ifNoneMatch;
             try {
                 ifNoneMatch = headers.getIfNoneMatch();
@@ -81,7 +89,6 @@ public class PlanController {
             }
             System.out.println(ifNoneMatch);
 
-            // Check If-Match header
             List<String> ifMatch;
             try {
                 ifMatch = headers.getIfMatch();
@@ -92,6 +99,7 @@ public class PlanController {
 
             Map<String, Object> objectToReturn = planService.getPlan(key);
             String eTag = objectToReturn.get("eTag").toString();
+
             HttpHeaders headersToSend = new HttpHeaders();
             headersToSend.setETag(eTag);
 
@@ -127,6 +135,12 @@ public class PlanController {
             if (!planService.isKeyPresent(key))
                 throw new ResourceNotFoundException("Plan not found!");
             planService.deletePlan(key);
+            Map<String, String> message = new HashMap<>();
+            message.put("operation", "DELETE");
+            message.put("body", objectId);
+
+            System.out.println("Sending message: " + message);
+            template.convertAndSend(queueName, message);
             return new ResponseEntity<>("{\"message\": \"Plan deleted successfully\"}", HttpStatus.OK);
         } catch (BadRequestException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
@@ -193,8 +207,8 @@ public class PlanController {
 //            jsonSchemaService.validateJson(planObject);
 
             JSONObject newPlanFields = new JSONObject(planObject);
-            System.out.println(objectId+" "+newPlanFields.get("objectId"));
-            if(!objectId.equals(newPlanFields.get("objectId")))
+            System.out.println(objectId + " " + newPlanFields.get("objectId"));
+            if (!objectId.equals(newPlanFields.get("objectId")))
                 throw new BadRequestException("objectId in request body does not match the objectId in the URL!");
 //            if (newPlanFields.get("objectId") != objectId)
 //                throw new BadRequestException("objectId in request body does not match the objectId in the URL!");
@@ -224,55 +238,7 @@ public class PlanController {
             if (!ifMatch.contains(currentETag))
                 throw new ResourceNotModifiedException("ETag does not match!");
             System.out.println(213);
-            // Merge new fields into the existing plan
-//            for (String keyField : newPlanFields.keySet()) {
-//                System.out.println(keyField + " : " + newPlanFields.get(keyField) + " : " + existingPlan.get(keyField));
-//                existingPlan.put(keyField, newPlanFields.get(keyField));
-//            }
-//
-//            System.out.println(existingPlan);
-//            planService.deletePlan(key);
-            // Merge new fields into the existing plan
-//            for (String keyField : newPlanFields.keySet()) {
-//                if (keyField.equals("linkedPlanServices")) {
-//                    // Handle linkedPlanServices separately
-//                    for (Object newServiceObj : newPlanFields.getJSONArray(keyField)) {
-//                        JSONObject newService = (JSONObject) newServiceObj;
-//                        boolean exists = false;
-//                        for (Object existingServiceObj : existingPlan.getJSONArray(keyField)) {
-//                            JSONObject existingService = (JSONObject) existingServiceObj;
-//                            if (existingService.getString("objectId").equals(newService.getString("objectId"))) {
-//                                // Update existing service
-//                                for (String serviceKey : newService.keySet()) {
-//                                    existingService.put(serviceKey, newService.get(serviceKey));
-//                                }
-//                                exists = true;
-//                                break;
-//                            }
-//                        }
-//                        if (!exists) {
-//                            // Add new service
-//                            System.out.println(newService);
-//                            existingPlan.getJSONArray(keyField).put(newService);
-//                        }
-//                    }
-//                } else {
-//                    existingPlan.put(keyField, newPlanFields.get(keyField));
-//                }
-//            }
-//            if (newPlanFields.has("planCostShares")) {
-//                JSONObject newPlanCostShares = newPlanFields.getJSONObject("planCostShares");
-//                JSONObject existingPlanCostShares = existingPlan.getJSONObject("planCostShares");
-//
-//                if (!newPlanCostShares.getString("objectId").equals(existingPlanCostShares.getString("objectId"))) {
-//                    throw new IllegalArgumentException("Bad Request: objectId in planCostShares does not match.");
-//                } else {
-//                    // Update planCostShares if the objectId matches
-//                    for (String key : newPlanCostShares.keySet()) {
-//                        existingPlanCostShares.put(key, newPlanCostShares.get(key));
-//                    }
-//                }
-//            }
+
             for (String keyField : newPlanFields.keySet()) {
                 if (keyField.equals("linkedPlanServices")) {
                     // Handle linkedPlanServices separately
@@ -329,14 +295,27 @@ public class PlanController {
                 }
             }
 
-// Print the final updated plan
             System.out.println(existingPlan);
 
 
             System.out.println(existingPlan);
             planService.deletePlan(key);
 
+            Map<String, String> message = new HashMap<>();
+            message.put("operation", "DELETE");
+            message.put("body", objectId);
+
+            System.out.println("Sending message: " + message);
+            template.convertAndSend(queueName, message);
+
             String updatedETag = planService.createPlan(existingPlan, key);
+
+            message = new HashMap<>();
+            message.put("operation", "SAVE");
+            message.put("body", existingPlan.toString());
+
+            System.out.println("Sending message: " + message);
+            template.convertAndSend(queueName, message);
 
             HttpHeaders headersToSend = new HttpHeaders();
             headersToSend.setETag(updatedETag);

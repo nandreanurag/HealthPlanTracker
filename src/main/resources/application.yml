@@ -22,8 +22,24 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
-server:
+
+
   port: 8080
+
+
+  amqp:
+    deserialization:
+      trust:
+        all: true
 
 clientId:
 clientSecret:
+
+
+rabbitmq:
+  queue: indexing-queue-info7255
+  exchange: spring-boot-exchange
+
+
+
+
